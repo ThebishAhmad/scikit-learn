@@ -388,6 +388,42 @@ def test_vector_scikit_single_vs_scipy_single(global_random_seed):
     assess_same_labelling(cut, cut_scipy)
 
 
+@pytest.mark.parametrize("metric", ["mahalanobis", "seuclidean"])
+def test_single_linkage_parametrized_metric(metric, global_random_seed):
+    # Non-regression test for gh-26961: single linkage used to fail for
+    # metrics that require extra parameters (V/VI), while the other
+    # linkages worked by delegating to scipy.
+    n_samples, n_features, n_clusters = 20, 5, 3
+    rng = np.random.RandomState(global_random_seed)
+    # Plain random data: full-rank covariance, so the Mahalanobis inverse
+    # covariance exists.
+    X = rng.normal(size=(n_samples, n_features))
+
+    out = hierarchy.linkage(X, method="single", metric=metric)
+    children_scipy = out[:, :2].astype(int)
+
+    children, _, n_leaves, _ = _TREE_BUILDERS["single"](X, affinity=metric)
+
+    # Sort the order of child nodes per row for consistency
+    children.sort(axis=1)
+    assert_array_equal(
+        children,
+        children_scipy,
+        "linkage tree differs from scipy impl for single linkage.",
+    )
+
+    cut = _hc_cut(n_clusters, children, n_leaves)
+    cut_scipy = _hc_cut(n_clusters, children_scipy, n_leaves)
+    assess_same_labelling(cut, cut_scipy)
+
+    # The estimator itself should fit, as it does for the other linkages
+    clustering = AgglomerativeClustering(
+        n_clusters=n_clusters, metric=metric, linkage="single"
+    )
+    clustering.fit(X)
+    assert len(set(clustering.labels_)) == n_clusters
+
+
 def test_union_find_fast_find_compresses_path():
     """Check that fast_find compresses the queried path to its root."""
     union_find = PytestUnionFind(5)

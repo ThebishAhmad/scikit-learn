@@ -570,7 +570,19 @@ def linkage_tree(
             and affinity in METRIC_MAPPING64
         ):
             # We need the fast cythonized metric from neighbors
-            dist_metric = DistanceMetric.get_metric(affinity)
+            # Metrics that take extra parameters are given the same
+            # defaults scipy uses, so that single linkage behaves like
+            # the other linkages, which delegate to scipy.
+            if affinity == "mahalanobis":
+                dist_metric = DistanceMetric.get_metric(
+                    affinity, VI=np.linalg.inv(np.cov(X, rowvar=False))
+                )
+            elif affinity == "seuclidean":
+                dist_metric = DistanceMetric.get_metric(
+                    affinity, V=np.var(X, axis=0, ddof=1)
+                )
+            else:
+                dist_metric = DistanceMetric.get_metric(affinity)
 
             # The Cython routines used require contiguous arrays
             X = np.ascontiguousarray(X, dtype=np.double)
